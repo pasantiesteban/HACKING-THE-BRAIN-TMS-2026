@@ -1,0 +1,178 @@
+---
+title: "TMS iTBS - nback RT analysis"
+output: html_document
+date: "2026-06-03"
+---
+
+## Introduction
+
+In this file, you find our results of research question 1 of the paper. We start this file with data processing (the same as all other files) and then delve into our main findings. Readers interested in verifying the main result in RQ1 should search for the string "Research Question 1". 
+## Packages
+
+```{r}
+# import packages
+library(lme4)     # mixed models
+library(dplyr)    # dataframe manipulation
+library(readr)    # reading in the data
+library(emmeans)  # likelihood ratio testing
+library(purrr)    # for map()
+library(lattice)  # for xyplot()
+library(TAF)      # setting up output file directory structure during model fitting
+library(moments)  # skewness for selecting between additive and multiplicative models of response times
+library(effectsize) # for cohens d
+
+
+
+#If you get an error, you likely need to install the packages using the "install.package('insert-package-name-here')" command
+```
+
+
+## Notebook configurable settings
+
+make an overall output directory (model summaries, stats, etc. will all go here)
+```{r}
+# name the directories to read data from and write output to
+input_version = ''
+output_version = 'nback'
+outputdir = sprintf("%s/../candidate-models/regression-models-%s",getwd(), output_version)
+
+```
+
+```{r eval=FALSE}
+
+mkdir(outputdir)
+```
+
+
+## Loading Data
+In this step, we load our data. We also filter out data points in which response time is null, i.e., no response to the question given from the participant. 
+
+We expect 6720 rows. Each row is an item level data point -- an instance where a participant answered a stimulus question.
+
+
+```{r}
+input_file = sprintf("%s/../nback-full-data.csv", getwd())
+raw_data <- read.csv(input_file)
+
+# Keep rows where duration_seconds is NOT NA
+raw_data <- raw_data[!is.na(raw_data$duration), ]
+raw_data$correct_num <- ifelse(raw_data$correct_answer == "True", 1, 0)
+
+
+nrow(raw_data)
+
+```
+
+
+## Filtering and Data Quality 
+
+In this procedure, we take steps to support data quality.
+
+### Removing irrelevant participants
+
+In this step, we remove the data of participants we knew to be pilots as well as one participant who, upon researcher inspection, did not pass any programming tasks.
+
+After this step, we expect 6360 rows -- an instance where a participant answered a stimulus question.
+
+```{r Nans}
+
+participants_to_remove <- c(#Pilots
+                            "Sarah", "pilot", "K9TX", 
+                            
+                            #Participant who failed all programming tasks
+                            "Y5DG"
+                            )
+
+data <- subset(raw_data, !(participant_id %in% participants_to_remove))
+
+nrow(data)
+
+```
+
+### Filter data based on manual annotation  
+In this step, we remove rows (i.e., instances in which person X answered question Y) corresponding to incidents in which the laboratory notebook maintained by the experimenter indicated non-compliance with our protocol or other externalities that invalidate the observation. See Section 'Analysis Methodology' of the paper text for more information. 
+
+However, for all instances where N-back was done, the researcher reports no issues. Thus, we do not do this step
+
+```{r}
+# Nothing happens :) ; see note above
+```
+
+
+## Selecting Data for Analysis
+
+In this step, we primarily care about analyzing response times in which participants got the trial correct; correct only response times. Thus, we select those trials and we expect 4,757 rows.
+
+```{r}
+data <- data[data$correct_answer == "True", ]
+
+nrow(data)
+
+```
+
+### Consistency Check: Mean reaction time (reported in paper)
+
+We calculate the mean response time. Since we know that letters in nback are shown for 1500ms, a time similar to that gives us confidence that we have measured, recorded and loaded the data correctly. These mean times are also reported in the paper.
+
+```{r}
+mean_value <- mean((data$response_time))
+print(mean_value)
+```
+
+We calculate mean response times per tms condition. "WM" represents the treatment condition and "CM" represents the control condition in our data. 
+
+```{r}
+tmsW <- data[(data$tms_type == "WM"), ]
+
+mean_value <- mean((tmsW$response_time))
+print(mean_value)
+
+tmsC <- data[(data$tms_type == "CM"), ]
+
+mean_value <- mean((tmsC$response_time))
+print(mean_value)
+```
+
+
+We also look at the distribution and find that it is normally distributed
+
+```{r}
+
+hist(data$response_time)
+
+```
+
+
+## TMS Response Time (Research Question 1)
+
+We want to analyze the potential accuracy benefits of TMS. We consider the accuracy of all coding problems/tasks. We separate out treatment condition accuracy scores from the control condition accuracy scores.
+
+For interpretability of our results, we favor "simpler" statistics if possible (see Analysis Methodology: Section V.C)
+We begin with the Welch's TTest. 
+
+
+```{r}
+treatment = data[data$tms_type == 'WM',]
+control = data[data$tms_type == 'CM',]
+
+
+t.test(treatment$response_time, control$response_time)  #Welch's ttest
+cohens_d(treatment$response_time, control$response_time, pooled_sd = FALSE) #Cohen's d
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

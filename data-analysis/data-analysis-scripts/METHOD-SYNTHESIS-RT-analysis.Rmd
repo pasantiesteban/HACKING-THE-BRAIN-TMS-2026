@@ -1,0 +1,452 @@
+---
+title: "TMS iTBS - Method Synthesis RT Analysis"
+output: html_document
+date: "2026-6-24"
+---
+
+
+## Introduction
+
+In this file, you find our results of research question 2 and 3 of the paper. We start this file with data processing (the same as all other files) and then delve into our main findings. Readers interested in verifying the main result in RQ2 should search for the string "Research Question 2". Readers interested in verifying the main result in RQ3 should search for the string "Research Question 3". 
+
+
+## Packages
+
+```{r}
+# import packages
+library(lme4)     # mixed models
+library(dplyr)    # dataframe manipulation
+library(readr)    # reading in the data
+library(emmeans)  # likelihood ratio testing
+library(purrr)    # for map()
+library(lattice)  # for xyplot()
+library(TAF)      # setting up output file directory structure during model fitting
+library(moments)  # skewness for selecting between additive and multiplicative models of response times
+library(ggplot2)  # to make plots
+library(tidyr)    # dataframe manipulation
+
+
+#If you get an error, you likely need to install the packages using the "install.package('insert-package-name-here')" command
+```
+
+
+## Notebook configurable settings
+
+We name of the directory write output to and we make an overall output directory (model summaries, stats, etc. will all go here)
+```{r}
+output_version = 'programming'
+outputdir = sprintf("%s/../candidate-models/regression-models-%s",getwd(), output_version)
+
+```
+
+```{r eval=FALSE}
+mkdir(outputdir)
+```
+
+## Loading Data
+In this step, we load our data. We also filter out data points in which response time is null, i.e., no response to the question given from the participant. We also add a new column to our data that represents the accuracy of the participant based on two columns already in the data.
+
+We expect 1268 rows. Each row is an item level data point -- an instance where a participant answered a stimulus question.
+
+```{r}
+#read input file
+input_file = sprintf("%s/../full-programming-data.csv", getwd())
+raw_data <- read.csv(input_file)
+
+# Keep rows where duration_seconds is NOT NA
+raw_data <- raw_data[!is.na(raw_data$duration_seconds), ]
+
+
+# we are adding a column related to accuracy where points described the number of points a participant earn in the specific problem, max points described that max points anyone could earn for a specific question. Points fraction described their difference
+raw_data$points_fraction <- raw_data$points / raw_data$max_points
+
+
+nrow(raw_data)
+```
+
+
+## Filtering and Data Quality 
+
+In this procedure, we take steps to support data quality.
+
+### Removing irrelevant participants
+
+In this step, we remove the data of participants we knew to be pilots as well as one participant who, upon researcher inspection, did not pass any programming tasks.
+
+After this step, we expect 1219 rows -- an instance where a participant answered a stimulus question.
+
+```{r Nans}
+
+#Select participant data to remove
+participants_to_remove <- c(#Pilots
+                            "Sarah", "pilot", "K9TX", 
+                            
+                            #Participant who failed all programming tasks
+                            "Y5DG"
+                            )
+#Remove data from said participants
+data <- subset(raw_data, !(participant_id %in% participants_to_remove))
+
+nrow(data)
+
+
+```
+
+
+
+
+
+### Filter data based on manual annotation  
+In this step, we remove rows (i.e., instances in which person X answered question Y) corresponding to incidents in which the laboratory notebook maintained by the experimenter indicated non-compliance with our protocol or other externalities that invalidate the observation. See Section 'Analysis Methodology' of the paper text for more information. 
+
+Below, a comment was written that describes what occurred that merited the removal of the data point. However, we also make the raw annotations avaliable in a seperate file in this repo. 
+
+After this step, we have 1205 rows -- an instance where a participant answered a stimulus question.
+
+```{r}
+
+# Rows that will be filtered out
+removed_rows <- data[
+  #Participant B6LW asked for scratch paper during problem 1 of each session or asked a question for problem 7
+  (data$participant_id == "B6LW" & data$problem_order == 1 & data$session == 1) |
+  (data$participant_id == "B6LW" & data$problem_order == 7 & data$session == 1) |
+  (data$participant_id == "B6LW" & data$problem_order == 1 & data$session == 2) |
+  
+  #Particpant W3FP asked questions during problems 1 and 2
+  (data$participant_id == "W3FP" & data$problem_order == 1 & data$session == 1) |
+  (data$participant_id == "W3FP" & data$problem_order == 2 & data$session == 1) |
+  
+  #Participant J8RC was interrupted to plug laptop to charger
+  (data$participant_id == "J8RC" & data$problem_order == 14 & data$session == 1) |
+  
+  #Participant R8CJ was interrupted to remind her to stop revisiting problems
+  (data$participant_id == "R8CJ" & data$problem_order == 4 & data$session == 1) |
+  
+  #Participant T9MK asked a question
+  (data$participant_id == "T9MK" & data$problem_order == 1 & data$session == 1) |
+  
+  #Participant S8KT asked a question
+  (data$participant_id == "S8KT" & data$problem_order == 2 & data$session == 1) |
+  
+  #Participant H6ZT started trying to make conversation at the end
+  (data$participant_id == "H6ZT" & data$problem_order == 25 & data$session == 1) |
+  (data$participant_id == "H6ZT" & data$problem_order == 26 & data$session == 1) |
+    
+  #Participant M4ZT took a call in the middle of a problem
+  (data$participant_id == "M4ZT" & data$problem_order == 19 & data$session == 1) |
+    
+  #Participant C3RV asked a question
+  (data$participant_id == "C3RV" & data$problem_order == 7 & data$session == 2) |
+  
+  #Participant Z9VB asked a question
+  (data$participant_id == "Z9VB" & data$problem_order == 9 & data$session == 1)
+  ,
+]
+
+
+#Lets print out all the rows we are removing. You should expect 14
+paste0("(", removed_rows$participant_id, ", ", removed_rows$stimulus_id, ")") 
+
+#This line offically removes those trails from our data
+data <- anti_join(data, removed_rows)
+
+nrow(data)
+
+
+```
+
+
+
+## Selecting Data for Analysis
+
+### Method Synthesis data
+
+In this step, we select the data we are interested in analyzing. This is file, this would be the "Method Synthesis Tasks" -> part of research question 2 and 3. We refer to "method synthesis" tasks in our data as a "long". 
+
+
+After this step, we expect 187 rows.
+
+```{r}
+            # select trials that of stimulus type 'long' and where participant recieved full points
+data <- data[data$stimulus_type == "long" & data$points == data$max_points, ] 
+
+
+nrow(data)
+
+
+```
+
+
+
+
+### Consistency Check: Mean reaction time (reported in paper)
+
+We calculate the mean response time. Since we want each task to take about a minute and a half on average, a time similar to that gives us confidence that we have measured, recorded and loaded the data correctly. These mean times are also reported in the paper.
+
+```{r}
+mean_value <- mean((data$duration_seconds))
+print(mean_value)
+```
+
+We calculate mean response times per tms condition. "W" represents the treatment condition and "C" represents the control condition in our data. 
+
+```{r}
+tmsW <- data[(data$tms_type == "W"), ]
+mean_value <- mean((tmsW$duration_seconds))
+print(mean_value)
+tmsC <- data[(data$tms_type == "C"), ]
+mean_value <- mean((tmsC$duration_seconds))
+print(mean_value)
+
+```
+
+
+
+## Mixed effects Analysis (Compare against prior work)
+
+We do the following analysis to be comparable against prior TMS work that used mixed effects analysis 
+
+
+### Select independent variables
+
+1.  `participant_id` (person) : random intercept
+    -   People are drawn from an underlying distribution; we aren't interested in learning coefficients specific to the members of our sample, but rather in what they tell us about that underlying population. Random effects tell us about the distribution rather than the elements observed.
+
+    -   This variable is used to model person-specific attributes, such as a "skill," translating to overall faster or slower response times, that can be different for each person 
+    
+2.  `problem_id` (question prompt) : random intercept
+    -   The underlying distribution of stimuli is a little less clear than that of participants. This variable can be thought of as modeling the dispersion of question-specific difficulties. 
+
+3.  `tms_type` (TMS treatment condition, i.e. brain region stimulated) : fixed & random intercepts
+    -   Based on previous literature, we hypothesize that the brain region stimulated may have an effect that is systematic (i.e. very consistent between people, topics, etc.), quantitatively heterogeneous (i.e. directionally consistent, but widely varying in magnitude), or even a qualitatively heterogeneous (i.e. varying in direction, possibly in conjunction with magnitude). Therefore, we assess the goodness of fit for candidate models containing `TMS_Type` as a fixed effect, random effect, both, or neither, in order to test this hypothesis.
+    
+4.  `session`and `problem_order` (chronological numbering of the session, per participant) : fixed intercept
+    -   This is used to account for learning/training effect, i.e. participants getting better at test-taking under our specific test instrument over the course of the study. For example, they may become more familiar with the question structure, or become better at recalling old material as they do more practice questions. We expect this to be systematic (uniformly decreasing response time), so we model it as a fixed effect.
+    
+
+5.  `stimuli_group` : fixed intercept
+    -   Stimuli may belong to different conceptual or topical categories that systematically influence response times.
+We model these differences as fixed effects because the categories themselves are of substantive interest rather than being treated as a random sample from a larger population of categories.
+
+
+
+
+### Specify candidate predictor structures for mixed model formulas
+
+```{r eval=FALSE}
+fixed_effects = c(# no fixed effects
+                  "", 
+                  
+                  # no interactions
+                  "tms_type", 
+                  "session", 
+                  "problem_order",
+                  "stimuli_group",
+                  
+                  
+                  # 2-way interactions 
+                  # These types of interactions include both interactions and additive models
+                  # example: "tms_type * session" is "tms_type + session + tms_type:session"
+                  "tms_type * session", 
+                  "tms_type * problem_order",
+                  "tms_type * stimuli_group",
+                  "session * problem_order"  , 
+                  "session * stimuli_group",
+                  "problem_order * stimuli_group" 
+                  
+                  
+                  )
+```
+
+
+```{r eval=FALSE}
+random_effects = c(#"",                               # (1)
+                   "participant_id", 
+                   "stimulus_id", 
+                   "participant_id:tms_type",
+                   "stimulus_id:tms_type" 
+                   )
+```
+
+In this first cell, we enumerate random effect structures by taking all combinations of the random effects specified.
+
+```{r eval=FALSE}
+random_effects = map(random_effects, function (s) sprintf("(1|%s)", s))
+
+random_exprs = c()
+N_random = length(random_effects)
+for (k in 1:N_random) {
+  iii = combn(1:N_random, k, simplify=FALSE)
+  for (ii in iii) {
+    expr = paste(random_effects[ii], collapse = " + ")
+    random_exprs = append(random_exprs, expr)
+  }
+}
+random_exprs
+```
+
+Now, we combine the response variable, fixed effects, and random effects together to generate our candidate model structures.
+
+```{r eval=FALSE}
+loglinear_formulae = c()
+for (fe in fixed_effects
+     #fixed_exprs
+     ) {
+  for (re in random_exprs) {
+    f = ""
+    if (fe == "") {
+      f = sprintf("log(duration_seconds) ~ %s", re) # put log(duration_seconds) for time or (points_fraction) for accuracy
+    } else {
+      f = sprintf("log(duration_seconds) ~ %s + %s", fe, re) # put log(duration_seconds) for time or (points_fraction) for accuracy
+    }
+    loglinear_formulae = append(loglinear_formulae, f)
+  }
+}
+
+print(length(loglinear_formulae))
+
+```
+
+```{r eval=FALSE}
+loglinear_formulae
+```
+
+### Model fitting (\~2 minutes)
+
+Here, we fit all the models. Of note, we use MLE rather than REML for compatibility with the AIC model selection strategy.
+
+We also store BIC (an alternative model selection criterion) in addition to AIC here. The two have different theoretical properties, both of which may be useful. Both describe the log likelihood of a fitted model, with a penalty for model complexity. The penalty in BIC is higher than that for AIC, so optimal-BIC models tend to be smaller (with fewer parameters) than optimal-AIC models. We have done our analysis relying on AIC, but we provide BIC-based model selection here in case the reader is interested.
+
+```{r eval=FALSE}
+if (TRUE) {
+  # make an output directory for the output of all the candidate linear models
+  logtime_outputdir = 
+    sprintf("%s/long_log_time_model_summaries_6_9_26", outputdir)
+  mkdir(logtime_outputdir)
+  
+  # make an output file for the AIC and BIC of each model
+  metricsfile = sprintf("%s/metrics.csv", logtime_outputdir)
+  file.create(metricsfile)
+  
+  sink(file = metricsfile,
+       append = FALSE,
+       type = "output",
+       split = FALSE
+       )
+  
+  cat("formula,AIC,BIC\n")
+  
+  sink()
+  
+  for (f in loglinear_formulae) {
+    # make an output directory for the output of this specific candidate model
+    f_outputdir = sprintf("%s/%s", logtime_outputdir, gsub(" ", "", f, fixed = TRUE))
+    mkdir(f_outputdir)
+    
+    # make the individual output file
+    summaryfile = sprintf("%s/summary.txt", f_outputdir)
+    
+    file.create(summaryfile)
+    
+    # print a delimiter for console output
+    cat(sprintf("\n---------------------------------------------\n%s\n", f))
+    
+    # fit the model
+    m = lmer(f, data=data, REML=FALSE)
+    
+    # send the model summary to the summary file
+    sink(file = summaryfile,
+         append = FALSE,
+         type = "output",
+         split = FALSE
+         )
+    
+    print(summary(m))
+    
+    sink()
+    
+    # send the AIC and BIC to the metrics file
+    metrics = sprintf("%s,%f,%f\n", f, AIC(m), BIC(m))
+    
+    sink(file = metricsfile,
+         append = TRUE,
+         type = "output",
+         split = FALSE)
+    
+    cat(metrics)
+    
+    sink()
+  }
+}
+```
+
+
+## Model selection (Research Question 2)
+In this step, we look at the top AIC-ranked model and find that 'tms_type' is a fixed effect. 
+
+```{r}
+# read in the AIC/BIC data
+fin = sprintf("%s/long_log_time_model_summaries_6_9_26/metrics.csv", outputdir)
+log_time_models_da = read_csv(fin)
+```
+```{r}
+head(log_time_models_da[order(log_time_models_da$AIC),], n = 5)
+```
+If the research is curious, we make our BIC-ranked models available
+```{r eval= FALSE}
+head(log_time_models_da[order(log_time_models_da$BIC),], n = 5)
+```
+
+
+Result: #1 AIC ranked model contains 'tms_type' as a fixed effect
+```{r}
+fA = log_time_models_da[order(log_time_models_da$AIC),]$formula[[1]]
+cat(fA)
+```
+
+
+
+## TMS Response Time (Research Question 3)
+
+To determine if a fixed effect (such as one corresponding to TMS) in a mixed effect model is significant, we employ standard likelihood ratio testing (LRT). LRT assesses the difference in two nested models (one with the feature, one without it) using χ2. Informally, it restricts the feature to zero and determines if that makes a significant difference.
+
+
+In this step, we write the model without 'tms_type'
+```{r}
+fB = "log(duration_seconds) ~ stimuli_group + (1|participant_id) + (1|stimulus_id)"
+cat(fB)
+```
+
+In this step, we employ LRT. The question being tested is whether including TMS condition and its interaction with stimulus group improves model fit.
+```{r}
+
+m0 = lmer(fA, data=data, REML=FALSE)
+m1 = lmer(fB, data=data, REML=FALSE)
+
+anova(m0, m1)
+
+
+```
+The likelihood ratio test indicates that adding TMS condition and its interaction with stimulus group significantly improves the model's ability to explain response times, compared with a model containing only stimulus group, χ²(2) = 9.35, p = .009. 
+
+
+In the next step, we are now interested in looking at the coefficients (in what direction is the tms effect).
+```{r}
+summary(m0)
+```
+
+
+t-value for tms_type is negative (-3.309) which shows that the treatment produces lower response times.
+
+
+
+
+
+
+
+
+
+
+
+
+

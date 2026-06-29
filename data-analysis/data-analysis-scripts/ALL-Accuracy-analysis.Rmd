@@ -1,0 +1,211 @@
+---
+title: "ALL-Accruacy-analysis"
+output: html_document
+date: "2026-06-25"
+---
+
+
+## Introduction
+
+In this file, you find our results of research question 4 of the paper. We start this file with data processing (the same as all other files) and then delve into our main findings. Readers interested in verifying the main result in RQ4 should search for the string "Research Question 4"
+
+
+## Packages
+
+```{r}
+# import packages
+library(lme4)     # mixed models
+library(dplyr)    # dataframe manipulation
+library(readr)    # reading in the data
+library(emmeans)  # likelihood ratio testing
+library(purrr)    # for map()
+library(lattice)  # for xyplot()
+library(TAF)      # setting up output file directory structure during model fitting
+library(moments)  # skewness for selecting between additive and multiplicative models of response times
+library(ggplot2)  # to make plots
+library(tidyr)    # dataframe manipulation
+library(effectsize) # for Cohens d
+library(tidyverse)
+
+
+#If you get an error, you likely need to install the packages using the "install.packages('insert-package-name-here')" command
+```
+
+## Notebook configurable settings
+
+```{r}
+# name the directories to read data from and write output to
+output_version = 'programming'
+
+```
+
+make an overall output directory (model summaries, stats, etc. will all go here)
+```{r}
+outputdir = sprintf("%s/../candidate-models/regression-models-%s",getwd(), output_version)
+```
+
+```{r eval=FALSE}
+#if you don't already have the directory, make it.
+mkdir(outputdir)
+```
+
+## Loading Data
+In this step, we load our data. We also filter out data points in which response time is null, i.e., no response to the question given from the participant. We also add a new column to our data that represents the accuracy of the participant based on two columns already in the data.
+
+We expect 1268 rows. Each row is an item level data point -- an instance where a participant answered a stimulus question.
+
+```{r}
+#read input file
+input_file = sprintf("%s/../full-programming-data.csv", getwd())
+raw_data <- read.csv(input_file)
+
+# Keep rows where duration_seconds is NOT NA
+raw_data <- raw_data[!is.na(raw_data$duration_seconds), ]
+
+
+# we are adding a column related to accuracy where points described the number of points a participant earn in the specific problem, max points described that max points anyone could earn for a specific question. Points fraction described their difference
+raw_data$points_fraction <- raw_data$points / raw_data$max_points
+
+
+nrow(raw_data)
+```
+
+
+## Filtering and Data Quality 
+
+In this procedure, we take steps to support data quality.
+
+### Removing irrelevant participants
+
+In this step, we remove the data of participants we knew to be pilots as well as one participant who, upon researcher inspection, did not pass any programming tasks.
+
+After this step, we expect 1219 rows -- an instance where a participant answered a stimulus question.
+
+```{r}
+
+#Select participant data to remove
+participants_to_remove <- c(#Pilots
+                            "Sarah", "pilot", "K9TX", 
+                            
+                            #Participant who failed all programming tasks
+                            "Y5DG"
+                            )
+#Remove data from said participants
+data <- subset(raw_data, !(participant_id %in% participants_to_remove))
+
+nrow(data)
+
+
+```
+
+
+### Filter data based on manual annotation  
+In this step, we remove rows (i.e., instances in which person X answered question Y) corresponding to incidents in which the laboratory notebook maintained by the experimenter indicated non-compliance with our protocol or other externalities that invalidate the observation. See Section 'Analysis Methodology' of the paper text for more information. 
+
+Below, a comment was written that describes what occurred that merited the removal of the data point. However, we also make the raw annotations avaliable in a seperate file in this repo. 
+
+After this step, we have 1205 rows -- an instance where a participant answered a stimulus question.
+
+```{r}
+
+# Rows that will be filtered out
+removed_rows <- data[
+  #Participant B6LW asked for scratch paper during problem 1 of each session or asked a question for problem 7
+  (data$participant_id == "B6LW" & data$problem_order == 1 & data$session == 1) |
+  (data$participant_id == "B6LW" & data$problem_order == 7 & data$session == 1) |
+  (data$participant_id == "B6LW" & data$problem_order == 1 & data$session == 2) |
+  
+  #Particpant W3FP asked questions during problems 1 and 2
+  (data$participant_id == "W3FP" & data$problem_order == 1 & data$session == 1) |
+  (data$participant_id == "W3FP" & data$problem_order == 2 & data$session == 1) |
+  
+  #Participant J8RC was interrupted to plug laptop to charger
+  (data$participant_id == "J8RC" & data$problem_order == 14 & data$session == 1) |
+  
+  #Participant R8CJ was interrupted to remind her to stop revisiting problems
+  (data$participant_id == "R8CJ" & data$problem_order == 4 & data$session == 1) |
+  
+  #Participant T9MK asked a question
+  (data$participant_id == "T9MK" & data$problem_order == 1 & data$session == 1) |
+  
+  #Participant S8KT asked a question
+  (data$participant_id == "S8KT" & data$problem_order == 2 & data$session == 1) |
+  
+  #Participant H6ZT started trying to make conversation at the end
+  (data$participant_id == "H6ZT" & data$problem_order == 25 & data$session == 1) |
+  (data$participant_id == "H6ZT" & data$problem_order == 26 & data$session == 1) |
+    
+  #Participant M4ZT took a call in the middle of a problem
+  (data$participant_id == "M4ZT" & data$problem_order == 19 & data$session == 1) |
+    
+  #Participant C3RV asked a question
+  (data$participant_id == "C3RV" & data$problem_order == 7 & data$session == 2) |
+  
+  #Participant Z9VB asked a question
+  (data$participant_id == "Z9VB" & data$problem_order == 9 & data$session == 1)
+  ,
+]
+
+
+#Lets print out all the rows we are removing. You should expect 14
+paste0("(", removed_rows$participant_id, ", ", removed_rows$stimulus_id, ")") 
+
+#This line offically removes those trails from our data
+data <- anti_join(data, removed_rows)
+
+nrow(data)
+
+```
+We have not finished data quality
+
+## TMS Accuracy Benefits (Research Question 4)
+
+We want to analyze the potential accuracy benefits of TMS. We consider the accuracy of all coding problems/tasks. We separate out treatment condition accuracy scores from the control condition accuracy scores.
+
+For interpretability of our results, we favor "simpler" statistics if possible (see Analysis Methodology: Section V.C)
+We begin with the Welch's TTest. 
+
+```{r}
+treatment_acc = data[data$tms_type == 'W',]
+control_acc = data[data$tms_type == 'C',]
+
+
+t.test(treatment_acc$points_fraction, control_acc$points_fraction)  #Welch's ttest
+cohens_d(treatment_acc$points_fraction, control_acc$points_fraction, pooled_sd = FALSE) #Cohen's d
+```
+
+We also do a non-parametric permutation test (accuracies may not be normally distributed).
+
+
+```{r}
+set.seed(42)
+group1 <- control_acc$points_fraction 
+group2 <- treatment_acc$points_fraction
+
+observed_diff <- mean(group2) - mean(group1)
+print(str_glue("Observed difference: {observed_diff}"))
+
+combined <- c(group1, group2)
+n1 <- length(group1)
+n <- length(combined)
+
+n_perm <- 10000
+perm_diffs <- numeric(n_perm)
+
+for (i in 1:n_perm) {
+  perm <- sample(combined, n, replace = FALSE)
+  perm_group1 <- perm[1:n1]
+  perm_group2 <- perm[(n1+1):n]
+  perm_diffs[i] <- mean(perm_group2) - mean(perm_group1)
+}
+
+p_value <- mean(abs(perm_diffs) >= abs(observed_diff))
+print(str_glue("Permutation test p-value: {p_value}"))
+
+
+```
+
+
+
+
+

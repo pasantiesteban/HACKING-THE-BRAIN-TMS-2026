@@ -1,0 +1,32 @@
+,,,(determined at session),,,,,,,,,
+ID,,,Threshold (80% of AMT),Session #1 TMS,Session #1 Version,,Session #2 TMS,Session #2 Version,,,Notes For session 1:,Notes For session 2:
+AAAA,,,25.00%,WM,B,,CM,A,,,"Participant did [X, Y, Z]","Participant did [A, B, C]"
+K9TX,,,29.00%,WM,A,,,,,,(Pilot Participant) Only analyze 10+ problems for session 1 (since participant was chatting through out the beginning),
+B6LW,,,25.00%,CM,B,,WM,A,,,"Asked for scratch paper on problem 1, asked a quesiton for problem 7, did not finish problem 20","Asked for scratch paper on problem 1, did not finish problem 20"
+W3FP,,,29.00%,WM,B,,CM,A,,,"Pariticipant had a hard time staying still during treatment. Asked a question in problem 1 and 2, didn't finish problem 16",
+N6YV,,,30.00%,CM,A,,WM,B,,,,participants moved a lot for TMS and had to pause in the middle. was fine in the last 2 minutes.
+H2LP,,,32.00%,WM,A,,CM,B,,,Did not finish problem 6 (got stuck with fibanachi),did not finish problem 23
+J8RC,,,30.00%,CM,A,,WM,B,,,"Needed a few seconds to plug in charger on laptop during problem 14, did not finish problem 23",
+F8RD,,,29.00%,WM,B,,CM,A,,,,
+F2KP,,,40.00%,CM,B,,,,,,,Treatment was uncomfortable for the participant and could not sit still. Decided to end experiment early
+R8CJ,,,36.00%,WM,A,,CM,B,,,"Jumped back and forth for problems 2,3,4, interrupted on 4 to tell her to stop",
+Q7LB,,,33.00%,CM,B,,WM,A,,,,
+X7RJ,,,29.00%,CM,A,,WM,B,,,,
+C9WN,,,27.00%,WM,B,,CM,A,,,"Had to pause TMS in the middle due to her moving so much. But once we restarted, it seemed okay. asked if she could skip problem 3. ",
+M4ZT,,,29.00%,WM,A,,CM,B,,,"Accidently gave him the n-back training session twice, took a call during problem 19",
+D7VM,,,32.00%,CM,A,,WM,B,,,,psychopy crashed in the first n-back run so I had to re-run it for the participant
+U4RB,,,37.00%,WM,B,,CM,A,,,,
+S8KT,,,36.00%,CM,A,,WM,B,,,asked a question on problem 2,
+E9WL,,,24.00%,WM,A,,CM,B,,,moved a little during TMS but I think was largely fine,
+G5NX,,,32.00%,WM,B,,CM,A,,,moved a little during TMS but I think was largely fine.  ,
+Z6TC,,,35.00%,WM,B,,CM,A,,,,
+A7PF,,,32.00%,CM,B,,WM,A,,,,
+V9QX,,,30.00%,CM,B,,WM,A,,,,
+T9MK,,,30.00%,WM,A,,,,,,Asked quesitons of question 1. ,
+B7QF,,,32.00%,WM,A,,CM,B,,,,
+R4XN,,,23.00%,WM,B,,CM,A,,,,
+H6ZT,,,27.00%,CM,A,,WM,B,,,last two problems of sesssion one can be taken out due to chatting,
+C3RV,,,32.00%,CM,B,,WM,A,,,,asked a question on problem 7
+P8NM,,,36.00%,CM,A,,WM,B,,,,
+Z9VB,,,36.00%,WM,A,,CM,B,,,asked a question on problem 9,
+Y5DG,,,36.00%,CM,B,,WM,A,,,,

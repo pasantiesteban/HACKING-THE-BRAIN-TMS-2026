@@ -1,0 +1,50 @@
+---
+title: "BH-Correction"
+output: html_document
+date: "2026-06-15"
+---
+
+#Introduction
+To correct for multiple comparisons, we apply family-wise (per research question) Benjamini–Hochberg procedure.
+
+For research question 1 (influencing nback with TMS), following our preregistration, we conducted two tests. 
+
+For research question 2 (modeling working memory and programming), we built a model and showed that tms is a statisically significant fixed effect. Following our preregistration, we only consider the #1 ranked model. 
+
+For research question 3 (influencing programming response times with TMS), the paper pulls out a different result from research question 2 to improve clarity. No new tests were performed, and thus no BH correction is needed. 
+
+For research question 4 (influencing programming accurary with TMS), following our preregistration, we only preformed one analysis, and thus no BH correction is needed. (The repo contains both the Welchs ttest and a non-parametric permutation test, but these are not independent probes to the same data.)
+
+
+Within each family, p-values are corrected using BH procedure (see data analysis scripts for where p-values comes from).
+
+
+
+## BH Correction For RQ 1 - Nback
+
+```{r}
+
+############################################################
+# BH correction: nback
+############################################################
+
+nback_timing_p <- c(
+
+  # Correct trials only
+  "response_time_p" = 0.022,
+
+  # Accuracy result was not significant, but is listed here as a placeholder because two tests were performed
+  "accuracy_p" = 1
+
+)
+
+p.adjust(nback_timing_p, method = "BH")
+
+
+```
+
+
+
+
+
+

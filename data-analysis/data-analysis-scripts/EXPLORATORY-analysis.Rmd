@@ -1,0 +1,337 @@
+---
+title: "Exploratory Analysis"
+output: html_document
+date: "2026-6-24"
+---
+
+
+## Introduction
+
+In this file, you find our exploratory results for our discussion section - specifically our results related to TMS perception and programming experience. We start this file with data processing (the same as all other files) and then delve into our main findings. Readers interested in verifying the main result in TMS Perception should search for the string "FIXME". Readers interested in verifying the main result in related to programming experience should search for the string "FIXME". 
+
+
+## Packages
+
+```{r}
+# import packages
+library(lme4)     # mixed models
+library(dplyr)    # dataframe manipulation
+library(readr)    # reading in the data
+library(emmeans)  # likelihood ratio testing
+library(purrr)    # for map()
+library(lattice)  # for xyplot()
+library(TAF)      # setting up output file directory structure during model fitting
+library(moments)  # skewness for selecting between additive and multiplicative models of response times
+library(ggplot2)  # to make plots
+library(tidyr)    # dataframe manipulation
+
+
+#If you get an error, you likely need to install the packages using the "install.package('insert-package-name-here')" command
+```
+
+
+## Notebook configurable settings
+
+We name of the directory write output to and we make an overall output directory (model summaries, stats, etc. will all go here)
+```{r}
+output_version = 'programming'
+outputdir = sprintf("%s/../candidate-models/regression-models-%s",getwd(), output_version)
+
+```
+
+```{r eval=FALSE}
+mkdir(outputdir)
+```
+
+## Loading Data
+In this step, we load our data. We also filter out data points in which response time is null, i.e., no response to the question given from the participant. We also add a new column to our data that represents the accuracy of the participant based on two columns already in the data.
+
+We expect 1268 rows. Each row is an item level data point -- an instance where a participant answered a stimulus question.
+
+```{r}
+#read input file
+input_file = sprintf("%s/../full-programming-data.csv", getwd())
+raw_data <- read.csv(input_file)
+
+# Keep rows where duration_seconds is NOT NA
+raw_data <- raw_data[!is.na(raw_data$duration_seconds), ]
+
+
+# we are adding a column related to accuracy where points described the number of points a participant earn in the specific problem, max points described that max points anyone could earn for a specific question. Points fraction described their difference
+raw_data$points_fraction <- raw_data$points / raw_data$max_points
+
+
+nrow(raw_data)
+```
+
+
+## Filtering and Data Quality 
+
+In this procedure, we take steps to support data quality.
+
+### Removing irrelevant participants
+
+In this step, we remove the data of participants we knew to be pilots as well as one participant who, upon researcher inspection, did not pass any programming tasks.
+
+After this step, we expect 1219 rows -- an instance where a participant answered a stimulus question.
+
+```{r Nans}
+
+#Select participant data to remove
+participants_to_remove <- c(#Pilots
+                            "Sarah", "pilot", "K9TX", 
+                            
+                            #Participant who failed all programming tasks
+                            "Y5DG"
+                            )
+#Remove data from said participants
+data <- subset(raw_data, !(participant_id %in% participants_to_remove))
+
+nrow(data)
+
+
+```
+
+
+
+
+
+### Filter data based on manual annotation  
+In this step, we remove rows (i.e., instances in which person X answered question Y) corresponding to incidents in which the laboratory notebook maintained by the experimenter indicated non-compliance with our protocol or other externalities that invalidate the observation. See Section 'Analysis Methodology' of the paper text for more information. 
+
+Below, a comment was written that describes what occurred that merited the removal of the data point. However, we also make the raw annotations avaliable in a seperate file in this repo. 
+
+After this step, we have 1205 rows -- an instance where a participant answered a stimulus question.
+
+```{r}
+
+# Rows that will be filtered out
+removed_rows <- data[
+  #Participant B6LW asked for scratch paper during problem 1 of each session or asked a question for problem 7
+  (data$participant_id == "B6LW" & data$problem_order == 1 & data$session == 1) |
+  (data$participant_id == "B6LW" & data$problem_order == 7 & data$session == 1) |
+  (data$participant_id == "B6LW" & data$problem_order == 1 & data$session == 2) |
+  
+  #Particpant W3FP asked questions during problems 1 and 2
+  (data$participant_id == "W3FP" & data$problem_order == 1 & data$session == 1) |
+  (data$participant_id == "W3FP" & data$problem_order == 2 & data$session == 1) |
+  
+  #Participant J8RC was interrupted to plug laptop to charger
+  (data$participant_id == "J8RC" & data$problem_order == 14 & data$session == 1) |
+  
+  #Participant R8CJ was interrupted to remind her to stop revisiting problems
+  (data$participant_id == "R8CJ" & data$problem_order == 4 & data$session == 1) |
+  
+  #Participant T9MK asked a question
+  (data$participant_id == "T9MK" & data$problem_order == 1 & data$session == 1) |
+  
+  #Participant S8KT asked a question
+  (data$participant_id == "S8KT" & data$problem_order == 2 & data$session == 1) |
+  
+  #Participant H6ZT started trying to make conversation at the end
+  (data$participant_id == "H6ZT" & data$problem_order == 25 & data$session == 1) |
+  (data$participant_id == "H6ZT" & data$problem_order == 26 & data$session == 1) |
+    
+  #Participant M4ZT took a call in the middle of a problem
+  (data$participant_id == "M4ZT" & data$problem_order == 19 & data$session == 1) |
+    
+  #Participant C3RV asked a question
+  (data$participant_id == "C3RV" & data$problem_order == 7 & data$session == 2) |
+  
+  #Participant Z9VB asked a question
+  (data$participant_id == "Z9VB" & data$problem_order == 9 & data$session == 1)
+  ,
+]
+
+
+#Lets print out all the rows we are removing. You should expect 14
+paste0("(", removed_rows$participant_id, ", ", removed_rows$stimulus_id, ")") 
+
+#This line offically removes those trails from our data
+data <- anti_join(data, removed_rows)
+
+nrow(data)
+
+
+```
+
+
+
+## Discussion Result (TMS Perception)
+
+In this step, we want to report the number of participants who reported discomfort in at least one session in the post-study survey. We also show their raw description of their reported discomfort
+
+```{r}
+
+data_discomfort <- data %>% distinct(participant_id, tms_discomfort, .keep_all = TRUE)
+
+data_discomfort <- data_discomfort[data_discomfort$tms_discomfort == "Yes",]
+
+print(data_discomfort$participant_id)
+
+print(nrow(data_discomfort))
+```
+
+```{r}
+
+print(data_discomfort[,c("participant_id","tms_discomfort_description")])
+
+```
+We also report that none of these participants (n=6) reported that their discomfort affect their overall performance in the tasks.
+
+```{r}
+
+print(data_discomfort[,c("participant_id","discomfort_affected_performance")])
+
+```
+
+
+
+
+## Discussion Result (Programming Experience: Accuracy)
+
+We also consider how TMS benefits are modulated by incoming preparation (i.e., prior experience
+with computing). We use the participants self-reported "programming experience rating" (i.e., On a scale of 1 to 10, how would you estimate your programming experience? 1 - very inexperienced and 10 - very experienced).
+
+
+In step, we first calculate the "benefit" of TMS on accuracy per participant. 
+
+```{r}
+
+participant_means <- data %>%
+  group_by(
+    participant_id,
+    programming_experience_1_10,
+    years_coding,
+    tms_type
+  ) %>%
+  summarize(
+    mean_accuracy = mean(points_fraction, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  pivot_wider(
+    names_from = tms_type,
+    values_from = mean_accuracy
+  )
+
+#"benefit" is mean accuracy in the treatment minus mean accuracy in the control
+participant_means$benefit <- participant_means$W - participant_means$C
+
+
+```
+
+
+
+We now report the mean experience rating to be able to determine a predefined cutoff for "more experienced" and "less experienced" programmers in out data.
+
+```{r}
+data_exp <- data[!is.na(data$programming_experience_1_10), ] 
+mean(data_exp$programming_experience_1_10)
+```
+
+We define participants with "more experience" as rating themselves a higher than 6.7  and participants with "less experiences as rating themselves a 6.7 or lower.
+
+```{r}
+experienced_rating <- participant_means[participant_means$programming_experience_1_10 > 6.7, ] 
+non_experienced_rating <- participant_means[participant_means$programming_experience_1_10 <= 6.7, ] 
+```
+
+
+Now, we can use a Welchs Ttest to answer our question. We do observe a trend that less experienced
+participants received 2× the benefit, but that trend does not
+rise to the level of statistical significance (p = 0.65)
+```{r}
+
+result <- t.test(experienced_rating$benefit, non_experienced_rating$benefit)
+print(result)
+
+```
+
+## Discussion Result (Programming Experience Part 2)
+
+We thus follow up by comparing more experienced participant accuracies in the treatment (W) vs. control condition (C) (no
+significant difference found, p = 0.169) and less experienced
+participant accuracies in the treatment (W) vs. control (C) condition
+(statistically significant, p = 0.048). 
+
+```{r}
+experienced_rating_treatment <- data[data$programming_experience_1_10 > 6.7 & data$tms_type == "W", ] 
+experienced_rating_control <- data[data$programming_experience_1_10 > 6.7 & data$tms_type == "C", ] 
+
+non_experienced_rating_treatment <- data[data$programming_experience_1_10 <= 6.7 & data$tms_type == "W", ] 
+non_experienced_rating_control <- data[data$programming_experience_1_10 <= 6.7 & data$tms_type == "C", ] 
+
+result <- t.test(experienced_rating_treatment$points_fraction, experienced_rating_control$points_fraction)
+result1 <- t.test(non_experienced_rating_treatment$points_fraction, non_experienced_rating_control$points_fraction)
+# Print the results
+print(result)
+print(result1)
+
+```
+
+Informally, it is easier to detect the benefit of TMS in less experienced participants.
+This gives confidence that the effect is no less pronounced on less experienced participants.
+
+## Discussion (Problem Difficulty)
+
+We also explored whether problem difficulty had an impact on the benefit of the TMS treatment.
+
+In this step, we first caluclate the mean accuracy of each problem and add it as a column in the data frame
+```{r}
+
+data_means <- data %>%
+  group_by(stimulus_id) %>%
+  mutate(
+    mean_accuracy = mean(points_fraction, na.rm = TRUE)
+  ) %>%
+  ungroup()
+
+```
+
+
+In this step, we figure out the mean accuracy of all problems. We then divided problems
+into tow categories, harder and easier, based on their average accuracies (lower or higher than an overall average accuracy of 72%). That is, we used an induced or derived notion of problem difficulty, not an a prior one.
+```{r}
+median_acc <- median(data_means$mean_accuracy)
+print(median_acc)
+
+data_problem_difficulty <- data_means %>% mutate(difficulty = ifelse(mean_accuracy < median_acc, "hard", "easy"))
+
+```
+
+In this step, we derive the benefit of TMS on the two categories of problem difficulty and tms conditions
+```{r}
+participant_summary <- data_problem_difficulty %>%
+  group_by(participant_id, tms_type, difficulty) %>%
+  summarize(
+    mean_acc = mean(points_fraction, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+benefits <- participant_summary %>%
+  pivot_wider(
+    names_from = tms_type,
+    values_from = mean_acc
+  ) %>%
+  mutate(
+    benefit = W - C
+  )
+
+benefits
+
+benefits_hard <- benefits[benefits$difficulty == "hard",]
+benefits_easy <- benefits[benefits$difficulty == "easy",]
+```
+
+In this step, we now employ a Welchs test between the two possible benefits in problem difficulty
+```{r}
+t.test(benefits_hard$benefit, benefits_easy$benefit)
+```
+While there was a trend for a slightly higher benefit for hard problems, it did not rise
+to the level of statistical significance (p = 0.155). This gives additional confidence in the applicability of our TMS treatment to this class of problems.
+
+
+
+
+
+
