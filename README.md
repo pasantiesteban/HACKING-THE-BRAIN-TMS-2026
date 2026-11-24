@@ -35,7 +35,7 @@ To facilitate reproduction, we provide both preprocessed datasets, which can be 
 
 ## Getting Started
 
-This repository is organized to help reviewers locate the materials most relevant to their evaluation.
+This repository is organized to help researchers locate the materials most relevant to them:
 
 * For researchers interested in reproducing or verifying the statistical analyses reported in the manuscript, we recommend starting with `data-analysis\`.
 * For researchers interested in reviewing participant screening and eligibility, we recommend `surveys\`.
