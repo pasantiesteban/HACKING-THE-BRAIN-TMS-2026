@@ -2,7 +2,7 @@
 
 ## Description
 
-All statistical analyses were conducted in R. This directory contains a folder to the scripts used to reproduce the analyses reported in the manuscript, including all research questions and the exploratory analyses discussed in the Discussion section.
+All statistical analyses were conducted in R. This directory contains a folder to the scripts used to reproduce the analyses reported in the manuscript, including all research questions and the exploratory analyses discussed in the Discussion section. The two preprocessed datasets are used directly by the analysis scripts. Researchers interested in reproducing or verifying our statistical analyses should begin with `data-analysis-scripts\`.
 
 The contents of this directory are organized as follows:
 
@@ -11,6 +11,6 @@ The contents of this directory are organized as follows:
 * `full-programming-data.csv` contains the preprocessed programming-task data used to answer Research Questions 2–4.
 * `nback-full-data.csv` contains the preprocessed n-back task data used to answer Research Question 1.
 
-The two preprocessed datasets are used directly by the analysis scripts.
 
-Researchers interested in reproducing or verifying our statistical analyses should begin with `data-analysis-scripts\`.
+
+
