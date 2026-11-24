@@ -42,9 +42,11 @@ This repository is organized to help reviewers locate the materials most relevan
 * For researchers interested in examining the raw data, field notes, or post-study responses, we recommend `data\`.
 * For researchers interested in reviewing the experimental stimuli used in the study, we recommend `stimuli\`.
 
+For your connivence, each folder contains another `README` document providing more details (and in some cases steps) on the material within said folder.
+
 ## Authors
 
-[Removed for annymous review]
+Priscila Santiesteban (pasanti@umich.edu), Hammad Ahmad (hammada@andrew.cmu.edu), Madeline Endres (mendres@umass.edu), Westley Weimer (weimerw@umich.edu)
 
 
 ## License
